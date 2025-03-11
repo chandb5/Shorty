@@ -23,29 +23,29 @@ provider "aws" {
 # }
 
 data "archive_file" "auth_lambda" {
-  type = "zip"
-  source_dir  = "${path.module}/../src/auth/"
+  type        = "zip"
+  source_file = "${path.module}/../src/auth/bootstrap"
   output_path = "${path.module}/../zips/auth-handler.zip"
 }
 
 resource "aws_lambda_function" "auth_lambda" {
   function_name = "auth-lambda"
-
-  runtime = "python3.10"
-  handler = "handler.lambda_handler"
+  filename      = data.archive_file.auth_lambda.output_path
+  handler       = "bootstrap"
+  runtime       = "provided.al2"
+  architectures = ["arm64"]
 
   source_code_hash = data.archive_file.auth_lambda.output_base64sha256
-  filename = data.archive_file.auth_lambda.output_path
-  role = aws_iam_role.lambda_exec.arn
-  architectures = ["arm64"]
-  memory_size = 128
+  role             = aws_iam_role.lambda_exec.arn
+  memory_size      = 128
+  timeout          = 1
   tags = {
     "env" = "dev"
   }
 }
 
 resource "aws_cloudwatch_log_group" "auth_lambda_log_group" {
-  name = "/aws/lambda/${aws_lambda_function.auth_lambda.function_name}"
+  name              = "/aws/lambda/${aws_lambda_function.auth_lambda.function_name}"
   retention_in_days = 14
 }
 
