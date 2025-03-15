@@ -12,7 +12,7 @@ type Response struct {
 
 func HandleRequest(ctx context.Context) (Response, error) {
 	return Response{
-		Message: "Hello, World!",
+		Message: "Hey World!",
 	}, nil
 }
 
