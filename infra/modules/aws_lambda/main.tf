@@ -4,23 +4,50 @@ data "archive_file" "zip_generator" {
   output_path = "${path.module}/../../../zips/${var.lambda_name}-handler.zip"
 }
 
-resource "aws_lambda_function" "auth_lambda" {
+resource "aws_lambda_function" "lambda_function" {
   function_name = "${var.lambda_name}-${var.project_name}"
   filename      = data.archive_file.zip_generator.output_path
   handler       = var.handler
   runtime       = var.runtime
-  architectures = ["arm64"]
+  role          = aws_iam_role.lambda_role.arn
 
-  source_code_hash = data.archive_file.zip_generator.output_base64sha256
-  role             = var.iam_role_arn
-  memory_size      = 128
-  timeout          = 1
-  tags = {
-    "env" = "dev"
+  architectures = ["arm64"]
+  source_code_hash = data.archive_file.zip_generator.output_sha
+  memory_size = 128
+  timeout     = 10
+
+  environment {
+    variables = var.environment_variables
   }
 }
 
 resource "aws_cloudwatch_log_group" "lambda_log_group" {
-  name              = "/aws/lambda/${aws_lambda_function.auth_lambda.function_name}"
-  retention_in_days = 14
+  name              = "/aws/lambda/${var.lambda_name}-${var.project_name}"
+  retention_in_days = var.log_retention_in_days
+}
+
+resource "aws_iam_role" "lambda_role" {
+  name = "${var.lambda_name}-lambda-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_policy" "lambda_iam_policy" {
+  name        = "${var.lambda_name}-lambda-policy"
+  description = "IAM policy for Lambda ${var.lambda_name} function"
+  policy      = var.lambda_iam_policy_json
+}
+
+resource "aws_iam_role_policy_attachment" "iam_role_policy_attachment" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = aws_iam_policy.lambda_iam_policy.arn
 }
