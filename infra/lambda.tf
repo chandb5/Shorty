@@ -1,31 +1,53 @@
-module "lambdas" {
+module "auth_lambda" {
   source = "./modules/aws_lambda"
-
-  for_each     = var.lambdas
-  lambda_name  = each.value.handler
-  runtime      = each.value.runtime
-  iam_role_arn = aws_iam_role.lambda_exec.arn
   handler      = "bootstrap"
+  lambda_name = "auth"
+  lambda_iam_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+      ]
+      Resource = "*"
+    }]
+  })
 }
 
-variable "lambdas" {
-  description = "A map of lambda names to their configuration"
-  type = map(object({
-    handler = string
-    runtime = string
-  }))
-  default = {
-    auth = {
-      handler = "auth"
-      runtime = "provided.al2"
-    }
-    shortener = {
-      handler = "shortener"
-      runtime = "provided.al2"
-    }
-  }
+module "shortener_lambda" {
+  source = "./modules/aws_lambda"
+  handler      = "bootstrap"
+  lambda_name = "shortener"
+  lambda_iam_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+      ]
+      Resource = "*"
+    }]
+  })
 }
 
-output "lambdas" {
-  value = { for k,v in module.lambdas : k => v.function_name }
+module "trigger_lambda" {
+  source = "./modules/aws_lambda"
+  handler      = "bootstrap"
+  lambda_name = "trigger"
+  lambda_iam_policy_json = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+      ]
+      Resource = "*"
+    }]
+  })
 }
