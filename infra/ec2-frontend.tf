@@ -1,7 +1,7 @@
 resource "aws_instance" "web-server-frontend" {
-  ami           = "ami-0655cec52acf2717b" # Ubuntu 22.04 LTS
-  instance_type = "t3.micro"
-  key_name = aws_key_pair.frontend-ec2-key.key_name
+  ami             = "ami-0655cec52acf2717b" # Ubuntu 22.04 LTS
+  instance_type   = "t3.micro"
+  key_name        = aws_key_pair.frontend-ec2-key.key_name
   security_groups = [aws_security_group.frontend-ec2-sg.name]
 
   user_data = <<-EOF
@@ -26,38 +26,38 @@ resource "aws_instance" "web-server-frontend" {
 }
 
 resource "aws_key_pair" "frontend-ec2-key" {
-  key_name = "frontend-ec2-key"
+  key_name   = "frontend-ec2-key"
   public_key = file("~/.ssh/id_ed25519.pub")
 }
 
 resource "aws_security_group" "frontend-ec2-sg" {
-  name = "frontend-ec2-sg"
+  name        = "frontend-ec2-sg"
   description = "Allow SSH and HTTP traffic"
   ingress {
-    from_port = 80
-    to_port = 80
-    protocol = "tcp"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    from_port = 443
-    to_port = 443
-    protocol = "tcp"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    from_port = 22
-    to_port = 22
-    protocol = "tcp"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
@@ -67,6 +67,6 @@ resource "aws_security_group" "frontend-ec2-sg" {
 }
 
 output "public_ip" {
-  value = aws_instance.web-server-frontend.public_ip
+  value       = aws_instance.web-server-frontend.public_ip
   description = "Public IP of the web server frontend instance"
 }
