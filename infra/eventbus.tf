@@ -6,8 +6,8 @@ resource "aws_cloudwatch_event_rule" "trigger-event-rule" {
   name           = "trigger-event"
   event_bus_name = aws_cloudwatch_event_bus.bridge.name
   event_pattern = jsonencode({
-    "source"      = ["aws.lambda"]
-    "detail-type" = ["trigger.event"]
+    "source"      = ["shortener"]
+    "detail-type" = ["trigger"]
   })
   depends_on = [aws_cloudwatch_event_bus.bridge]
 }
