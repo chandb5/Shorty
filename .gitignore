@@ -44,3 +44,6 @@ dist-ssr
 
 *.env
 venv/
+build/
+__pycache__/
+*/build/
