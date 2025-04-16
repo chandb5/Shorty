@@ -1,7 +1,23 @@
+resource "null_resource" "setup_dependencies" {
+  triggers = {
+    requirements_hash = md5(file("${path.module}/../../../backend/src/lambda/${var.lambda_name}/requirements.txt"))
+    source_hash = md5(file("${path.module}/../../../backend/src/lambda/${var.lambda_name}/index.py"))
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+      mkdir -p ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
+      pip install -r ${path.module}/../../../backend/src/lambda/${var.lambda_name}/requirements.txt -t ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
+      cp -r ${path.module}/../../../backend/src/lambda/${var.lambda_name}/index.py ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
+    EOT
+  }
+}
+
 data "archive_file" "zip_generator" {
-  type        = "zip"
-  source_file = "${path.module}/../../../backend/src/lambda/${var.lambda_name}/bootstrap"
+  type = "zip"
+  source_dir = "${path.module}/../../../backend/src/lambda/${var.lambda_name}"
   output_path = "${path.module}/../../../zips/${var.lambda_name}-handler.zip"
+  depends_on = [null_resource.setup_dependencies]
 }
 
 resource "aws_lambda_function" "lambda_function" {
@@ -14,7 +30,7 @@ resource "aws_lambda_function" "lambda_function" {
   architectures = ["arm64"]
   source_code_hash = data.archive_file.zip_generator.output_sha
   memory_size = 128
-  timeout     = 10
+  timeout     = 5
 
   environment {
     variables = var.environment_variables

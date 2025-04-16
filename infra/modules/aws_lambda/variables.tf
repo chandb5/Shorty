@@ -12,7 +12,7 @@ variable "lambda_name" {
 variable "runtime" {
   description = "The runtime to use for the lambda function"
   type        = string
-  default     = "provided.al2"
+  default     = "python3.10"
 }
 
 variable "handler" {
