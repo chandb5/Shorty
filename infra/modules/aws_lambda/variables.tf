@@ -37,3 +37,21 @@ variable "lambda_iam_policy_json" {
   description = "The IAM policy JSON to attach to the lambda function"
   type        = string
 }
+
+variable "vpc_id" {
+  description = "The VPC ID to attach the lambda function to"
+  type        = string
+  default = ""
+}
+
+variable "subnet_ids" {
+  description = "The subnet IDs to attach the lambda function to"
+  type        = list(string)
+  default     = []
+}
+
+variable "security_group_ids" {
+  description = "The security group IDs to attach the lambda function to"
+  type        = list(string)
+  default     = []
+}

@@ -6,8 +6,10 @@ resource "null_resource" "setup_dependencies" {
 
   provisioner "local-exec" {
     command = <<EOT
+      rm -rf ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
+      rm -rf ${path.module}/../../../zips/${var.lambda_name}-handler.zip
       mkdir -p ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
-      pip install -r ${path.module}/../../../backend/src/lambda/${var.lambda_name}/requirements.txt -t ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
+      pip3 install --platform manylinux2014_x86_64 --only-binary :all: --python-version 3.10 -r ${path.module}/../../../backend/src/lambda/${var.lambda_name}/requirements.txt -t ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
       cp -r ${path.module}/../../../backend/src/lambda/${var.lambda_name}/index.py ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
     EOT
   }
@@ -15,7 +17,7 @@ resource "null_resource" "setup_dependencies" {
 
 data "archive_file" "zip_generator" {
   type = "zip"
-  source_dir = "${path.module}/../../../backend/src/lambda/${var.lambda_name}"
+  source_dir = "${path.module}/../../../backend/src/lambda/${var.lambda_name}/build"
   output_path = "${path.module}/../../../zips/${var.lambda_name}-handler.zip"
   depends_on = [null_resource.setup_dependencies]
 }
@@ -27,13 +29,21 @@ resource "aws_lambda_function" "lambda_function" {
   runtime       = var.runtime
   role          = aws_iam_role.lambda_role.arn
 
-  architectures = ["arm64"]
+  architectures = ["x86_64"]
   source_code_hash = data.archive_file.zip_generator.output_sha
   memory_size = 128
-  timeout     = 5
+  timeout     = 30
 
   environment {
     variables = var.environment_variables
+  }
+
+  dynamic "vpc_config" {
+    for_each = var.vpc_id != "" ? [1] : []
+    content {
+      subnet_ids         = var.subnet_ids
+      security_group_ids = var.security_group_ids
+    }
   }
 }
 
