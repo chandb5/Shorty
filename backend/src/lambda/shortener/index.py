@@ -10,7 +10,9 @@ from utils.crud.url import (
     delete_short_url,
     get_short_url_record,
     list_short_urls,
-    update_long_url
+    update_long_url,
+    get_url_visits,
+    get_url_visits_by_user
 )
 from typing import Dict, Optional
 
@@ -66,13 +68,13 @@ async def handle_create_short_url(body, user_id):
 
 def middleware(event, context):
     auth_header = event.get("headers", {}).get("Authorization") or event.get("headers", {}).get("authorization")
-    if not auth_header or not auth_header.startswith("Bearer "):
+    token = auth_header.split(" ", 1)[1].strip() if auth_header else None
+    if not auth_header or not auth_header.startswith("Bearer ") or not token:
         return create_response(401, {"message": "Missing or invalid Authorization header"})
 
-    token = auth_header.split(" ", 1)[1]
     payload, error = verify_jwt_token(token)
     if error:
-        return create_response(401, {"message": error})
+        return create_response(401, {"message": "Invalid or expired token"})
 
     event["token_payload"] = payload
     return event
@@ -80,35 +82,33 @@ def middleware(event, context):
 
 async def async_handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method")
-    path = event.get("requestContext", {}).get("http", {}).get("path", "").replace("/shorten", "")
+    raw_path = event.get("requestContext", {}).get("http", {}).get("path", "")
+    path = raw_path.replace("/shorten", "").rstrip("/")
 
     user_id = event.get("token_payload", {}).get("sub")
     if not user_id:
         return create_response(401, {"message": "Missing user ID in token payload"})
 
-    if method == "GET" and path == "/":
+    if method == "GET" and path == "":
         urls = await list_short_urls(user_id)
         return create_response(200, {"short_urls": urls})
 
-    if method == "POST" and path == "/":
-        body = parse_body(event)
-        url = body.get("url")
+    if method == "GET" and path.startswith("/visits"):
+        slug_part = path[len("/visits"):].strip("/")
 
-        if not url or not isinstance(url, str) or len(url.strip()) == 0:
-            return create_response(400, {"error": "URL is required"})
-        if not url.startswith(("http://", "https://")):
-            return create_response(400, {"error": "URL must start with http:// or https://"})
-
-        existing_record = await get_short_url_record(long_url=url)
-        if not existing_record or len(existing_record) == 0:
-            try:
-                record = await handle_create_short_url(body, user_id)
-                return create_response(201, {"message": "Short URL created successfully!", "data": record})
-            except ValueError as e:
-                return create_response(400, {"error": str(e)})
+        if not slug_part:
+            all_visits = await get_url_visits_by_user(user_id)
+            return create_response(200, {"visits": all_visits})
         else:
-            return create_response(200, {"message": "Short URL already exists!", "data": existing_record})
+            slug = slug_part
+            try:
+                slug_visits = await get_url_visits(slug=slug)
+            except ValueError as e:
+                if str(e) == "Shortened URL not found":
+                    return create_response(404, {"error": "Shortened URL not found"})
 
+            return create_response(200, {"visits": slug_visits})
+    
     if method == "PUT" and path == "/":
         body = parse_body(event)
 

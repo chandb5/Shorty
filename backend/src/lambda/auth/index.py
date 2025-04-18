@@ -24,7 +24,7 @@ async def invalidate_refresh_token(refresh_token):
     await run_query_execute("DELETE FROM refresh_tokens WHERE token = $1", refresh_token)
 
 async def generate_tokens(user):
-    now = datetime.now(tz=timedelta(hours=0))
+    now = datetime.now(tz=None)
     payload = {
         'sub': str(user['id']),
         'email': user['email'],
