@@ -1,0 +1,8 @@
+import os
+
+JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRATION = 24
+VALID_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+MIN_LENGTH = 4
+MAX_LENGTH = 8
