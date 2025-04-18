@@ -1,5 +1,5 @@
 import uuid
-from utils.db import run_query_fetch, run_query_fetchrow
+from utils.db import run_query_fetch, run_query_fetchrow, run_query_execute
 
 
 async def create_short_url_record(slug, url, user_id):
@@ -75,4 +75,41 @@ async def delete_short_url(slug):
         RETURNING id, slug, url, user_id
         """,
         slug
+    )
+
+async def create_url_visit(slug):
+    shortened_url = await get_short_url_record(slug=slug)
+    if not shortened_url:
+        raise ValueError("Shortened URL not found")
+    
+    return await run_query_execute(
+        """
+        INSERT INTO url_visits (id, shortened_url_id, visit_time)
+        VALUES ($1, $2, NOW())
+        """,
+        str(uuid.uuid4()), shortened_url["id"]
+    )
+
+async def get_url_visits(slug):
+    shortened_url = await get_short_url_record(slug=slug)
+    if not shortened_url:
+        raise ValueError("Shortened URL not found")
+    
+    return await run_query_fetch(
+        """
+        SELECT id, shortened_url_id, visit_time
+        FROM url_visits
+        WHERE shortened_url_id = $1
+        """,
+        shortened_url["id"]
+    )
+
+async def get_url_visits_by_user(user_id):
+    return await run_query_fetch(
+        """
+        SELECT visits.* FROM url_visits AS visits LEFT JOIN shortened_urls AS urls
+        ON visits.shortened_url_id = urls.id
+        WHERE urls.user_id = $1
+        """,
+        user_id
     )

@@ -1,8 +1,10 @@
 import os
 
-JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key")
+JWT_SECRET = os.environ.get("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION = 24
 VALID_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 MIN_LENGTH = 4
 MAX_LENGTH = 8
+
+EVENT_BUS_NAME = os.environ.get("EVENT_BUS_NAME")

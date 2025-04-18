@@ -34,3 +34,5 @@ def verify_jwt_token(token):
         return None, "Token has expired"
     except jwt.InvalidTokenError:
         return None, "Invalid token"
+    except Exception as e:
+        return None, str(e)
