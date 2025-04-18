@@ -10,6 +10,7 @@ resource "null_resource" "setup_dependencies" {
       rm -rf ${path.module}/../../../zips/${var.lambda_name}-handler.zip
       mkdir -p ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
       pip3 install --platform manylinux2014_x86_64 --only-binary :all: --python-version 3.10 -r ${path.module}/../../../backend/src/lambda/${var.lambda_name}/requirements.txt -t ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
+      cp -r ${path.module}/../../../backend/src/utils/ ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build/utils
       cp -r ${path.module}/../../../backend/src/lambda/${var.lambda_name}/index.py ${path.module}/../../../backend/src/lambda/${var.lambda_name}/build
     EOT
   }

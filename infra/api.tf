@@ -15,7 +15,7 @@ module "shortener_gateway" {
   lambda_name     = module.shortener_lambda.function_name
   invoke_arn      = module.shortener_lambda.invoke_arn
   api_gateway_id  = aws_apigatewayv2_api.shortener_api.id
-  route_key       = "ANY /{proxy+}"
+  route_key       = "ANY /shorten/{proxy+}"
   execution_arn = aws_apigatewayv2_api.shortener_api.execution_arn
 }
 
@@ -26,6 +26,16 @@ module "auth_gateway" {
   invoke_arn      = module.auth_lambda.invoke_arn
   api_gateway_id  = aws_apigatewayv2_api.shortener_api.id
   route_key       = "ANY /auth/{proxy+}"
+  execution_arn = aws_apigatewayv2_api.shortener_api.execution_arn
+}
+
+module "public_gateway" {
+  source = "./modules/aws_api_gateway"
+
+  lambda_name     = module.public_lambda.function_name
+  invoke_arn      = module.public_lambda.invoke_arn
+  api_gateway_id  = aws_apigatewayv2_api.shortener_api.id
+  route_key       = "ANY /{proxy+}"
   execution_arn = aws_apigatewayv2_api.shortener_api.execution_arn
 }
 
