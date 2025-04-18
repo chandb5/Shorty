@@ -33,7 +33,7 @@ resource "aws_lambda_function" "lambda_function" {
   architectures = ["x86_64"]
   source_code_hash = data.archive_file.zip_generator.output_sha
   memory_size = 128
-  timeout     = 30
+  timeout     = 10
 
   environment {
     variables = var.environment_variables
