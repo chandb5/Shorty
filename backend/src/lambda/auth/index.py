@@ -1,62 +1,11 @@
-import os
-import asyncpg
 import asyncio
-import hashlib
-import json
 import jwt
 from datetime import datetime, timedelta
+from utils.config import JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRATION
+from utils.db import run_query_fetchrow, run_query_execute
+from utils.helper import create_response, parse_body, hash_password, verify_jwt_token
+from utils.crud.user import get_user_by_email, get_user_by_id, create_user
 import uuid
-
-JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
-JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION = 24
-
-async def get_db_conn():
-    return await asyncpg.connect(
-        user=os.environ.get('DB_USER'),
-        password=os.environ.get('DB_PASSWORD'),
-        database=os.environ.get('DB_NAME'),
-        host=os.environ.get('DB_HOST'),
-        port=os.environ.get('DB_PORT')
-    )
-
-async def run_query_fetch(query, *args):
-    conn = await get_db_conn()
-    try:
-        rows = await conn.fetch(query, *args)
-        return [dict(row) for row in rows]
-    finally:
-        await conn.close()
-
-async def run_query_fetchrow(query, *args):
-    conn = await get_db_conn()
-    try:
-        row = await conn.fetchrow(query, *args)
-        return dict(row) if row else None
-    finally:
-        await conn.close()
-
-async def run_query_execute(query, *args):
-    conn = await get_db_conn()
-    try:
-        return await conn.execute(query, *args)
-    finally:
-        await conn.close()
-
-async def get_user_by_email(email):
-    return await run_query_fetchrow(
-        "SELECT id, email, password_hash, salt FROM users WHERE email = $1", email
-    )
-
-async def create_user(user_data):
-    unique_id = str(uuid.uuid4())
-    row = await run_query_fetchrow("""
-        INSERT INTO users (id, email, password_hash, salt, created_at)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id
-    """, unique_id, user_data['email'], user_data['password_hash'],
-         user_data['salt'], user_data['created_at'])
-    return row['id']
 
 async def save_refresh_token(user_id, token, expires_at):
     await run_query_execute("""
@@ -71,43 +20,8 @@ async def validate_refresh_token(refresh_token):
     """, refresh_token)
     return row['user_id'] if row else None
 
-# Invalidate refresh token
 async def invalidate_refresh_token(refresh_token):
     await run_query_execute("DELETE FROM refresh_tokens WHERE token = $1", refresh_token)
-
-# Get user by ID
-async def get_user_by_id(user_id):
-    return await run_query_fetchrow(
-        "SELECT id, email, password_hash, salt FROM users WHERE id = $1", user_id
-    )
-
-# Execute query (used for generic SELECTs)
-async def execute_query(query):
-    return await run_query_fetch(query)
-
-# Helper functions
-def create_response(status_code, body):
-    return {
-        "statusCode": status_code,
-        "body": json.dumps(body, indent=4, sort_keys=True, default=str),
-        "Content-Type": "application/json"
-    }
-
-def parse_body(event):
-    body = event.get("body")
-    if not body:
-        return {}
-    if isinstance(body, str):
-        return json.loads(body)
-    elif isinstance(body, bytes):
-        return json.loads(body.decode('utf-8'))
-    return body
-
-def hash_password(password, salt=None):
-    if not salt:
-        salt = os.urandom(32).hex()
-    hashed = hashlib.sha256((password + salt).encode()).hexdigest()
-    return hashed, salt
 
 async def generate_tokens(user):
     now = datetime.now(tz=timedelta(hours=0))
@@ -131,15 +45,6 @@ async def generate_tokens(user):
         "token_type": "Bearer"
     }
 
-def verify_jwt_token(token):
-    try:
-        return jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM]), None
-    except jwt.ExpiredSignatureError:
-        return None, "Token has expired"
-    except jwt.InvalidTokenError:
-        return None, "Invalid token"
-
-# Route handlers
 async def handle_register(body):
     if not (body and body.get("email") and body.get("password") is not None):
         return create_response(400, {"message": "Email and password are required"})
