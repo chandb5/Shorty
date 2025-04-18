@@ -13,4 +13,11 @@ resource "aws_db_instance" "shortener-db" {
   skip_final_snapshot     = true
   backup_retention_period = 0
   multi_az                = false
+
+  vpc_security_group_ids = [aws_security_group.rds.id]
+  db_subnet_group_name   = aws_db_subnet_group.main.name
+  tags = {
+    Name = "shortener-db"
+  }
+  depends_on = [aws_db_subnet_group.main]
 }
