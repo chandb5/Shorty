@@ -6,6 +6,7 @@ import { ThemeToggle } from "./ThemeToggle"
 import { useNavigate } from "react-router-dom"
 import authService from "../services/auth"
 import urlService from "../services/url"
+import { Chart } from "./ui/Chart"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./ui/AlertDialog"
 
 // Interface for our component's state
@@ -16,6 +17,12 @@ interface DisplayUrlData {
   slug: string
   createdAt: string
   clicks: number
+  visits?: {
+    id: string;
+    shortened_url_id: string;
+    visit_time: string;
+  }[]
+  lastVisit?: string
 }
 
 // Interface for our component's state
@@ -39,6 +46,9 @@ export default function Dashboard() {
   const [isEditing, setIsEditing] = useState<boolean>(false)
   const [isDeleting, setIsDeleting] = useState<boolean>(false)
   const [actionLoading, setActionLoading] = useState<boolean>(false)
+  const [statsLoading, setStatsLoading] = useState<boolean>(false)
+  const [selectedUrl, setSelectedUrl] = useState<DisplayUrlData | null>(null)
+  const [showStats, setShowStats] = useState<boolean>(false)
   const navigate = useNavigate()
   
   // Check if user is logged in
@@ -55,18 +65,47 @@ export default function Dashboard() {
     setLoading(true)
     try {
       const response = await urlService.getUserUrls()
-      
-      // Transform API response to component's expected format
       const formattedUrls = response.short_urls.map(url => ({
         id: url.id,
         shortUrl: urlService.formatShortUrl(url.slug),
         originalUrl: url.url,
         slug: url.slug,
-        createdAt: new Date().toISOString(), // API doesn't provide creation date yet
-        clicks: 0 // API doesn't provide click count yet
+        createdAt: new Date().toISOString(),
+        clicks: 0
       }))
-      
-      setUrls(formattedUrls)
+
+      // Get visit data for all URLs
+      try {
+        const visitsResponse = await urlService.getAllVisits()
+        
+        // Group visits by shortened_url_id
+        const visitsByUrlId = visitsResponse.visits.reduce((acc, visit) => {
+          if (!acc[visit.shortened_url_id]) {
+            acc[visit.shortened_url_id] = []
+          }
+          acc[visit.shortened_url_id].push(visit)
+          return acc
+        }, {} as Record<string, typeof visitsResponse.visits>)
+        
+        // Update formattedUrls with visit counts and last visit time
+        const updatedUrls = formattedUrls.map(url => {
+          const urlVisits = visitsByUrlId[url.id] || []
+          return {
+            ...url,
+            clicks: urlVisits.length,
+            visits: urlVisits,
+            lastVisit: urlVisits.length > 0 
+              ? urlVisits.sort((a, b) => new Date(b.visit_time).getTime() - new Date(a.visit_time).getTime())[0].visit_time
+              : undefined
+          }
+        })
+        
+        setUrls(updatedUrls)
+      } catch (err) {
+        console.error("Failed to load visit data:", err)
+        // Still set URLs even if visit data failed to load
+        setUrls(formattedUrls)
+      }
     } catch (err: any) {
       console.error("Failed to load URLs:", err)
       setError("Failed to load your shortened URLs. Please try again.")
@@ -116,25 +155,68 @@ export default function Dashboard() {
         console.error("Failed to copy URL:", err)
       })
   }
-
-  // Format date string to a more readable format
-  const formatDate = (dateString: string) => {
+  
+  // Format date for display
+  const formatDateTime = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', { 
+    return date.toLocaleString('en-US', { 
       year: 'numeric', 
       month: 'short', 
-      day: 'numeric' 
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
     })
   }
+  
+  // Get time-based visit distribution
+  const getVisitStats = (visits: {visit_time: string}[] = []) => {
+    if (!visits || visits.length === 0) return null
+    
+    const today = new Date()
+    const yesterday = new Date(today)
+    yesterday.setDate(yesterday.getDate() - 1)
+    
+    const lastWeek = new Date(today)
+    lastWeek.setDate(lastWeek.getDate() - 7)
+    
+    const lastMonth = new Date(today)
+    lastMonth.setMonth(lastMonth.getMonth() - 1)
+    
+    const todayVisits = visits.filter(visit => {
+      const visitDate = new Date(visit.visit_time)
+      return visitDate.toDateString() === today.toDateString()
+    }).length
+    
+    const yesterdayVisits = visits.filter(visit => {
+      const visitDate = new Date(visit.visit_time)
+      return visitDate.toDateString() === yesterday.toDateString()
+    }).length
+    
+    const lastWeekVisits = visits.filter(visit => {
+      const visitDate = new Date(visit.visit_time)
+      return visitDate >= lastWeek
+    }).length
+    
+    const lastMonthVisits = visits.filter(visit => {
+      const visitDate = new Date(visit.visit_time)
+      return visitDate >= lastMonth
+    }).length
+    
+    return {
+      today: todayVisits,
+      yesterday: yesterdayVisits,
+      lastWeek: lastWeekVisits,
+      lastMonth: lastMonthVisits,
+      total: visits.length
+    }
+  }
 
-  // Truncate long URLs for display
   const truncateUrl = (url: string, maxLength: number = 50) => {
     return url.length > maxLength 
       ? `${url.substring(0, maxLength)}...` 
       : url
   }
 
-  // Start edit for a specific URL
   const handleStartEdit = (url: DisplayUrlData) => {
     setEditingUrl(url.slug)
     setUpdatedLongUrl(url.originalUrl)
@@ -142,14 +224,12 @@ export default function Dashboard() {
     setError(null)
   }
 
-  // Cancel editing
   const handleCancelEdit = () => {
     setEditingUrl(null)
     setUpdatedLongUrl("")
     setIsEditing(false)
   }
 
-  // Save edited URL
   const handleSaveEdit = async () => {
     if (!editingUrl || !updatedLongUrl.trim()) {
       setError("Please enter a valid URL")
@@ -180,15 +260,13 @@ export default function Dashboard() {
     }
   }
 
-  // Delete a URL
   const handleDeleteUrl = async (slug: string) => {
     setActionLoading(true)
     setError(null)
 
     try {
       await urlService.deleteUrl(slug)
-      
-      // Refresh the URL list
+
       await loadUserUrls()
     } catch (err: any) {
       console.error("Failed to delete URL:", err)
@@ -197,6 +275,78 @@ export default function Dashboard() {
       setActionLoading(false)
       setIsDeleting(false)
     }
+  }
+
+  const prepareDailyChartData = (visits: {visit_time: string}[] = []) => {
+    if (!visits || visits.length === 0) return []
+    
+    const visitsByDay = new Map<string, number>()
+    const today = new Date()
+    let dateArray = []
+    
+    for (let i = 13; i >= 0; i--) {
+      const date = new Date(today)
+      date.setDate(date.getDate() - i)
+      const dateStr = date.toISOString().split('T')[0]
+      visitsByDay.set(dateStr, 0)
+      dateArray.push({
+        date: dateStr,
+        visits: 0,
+        dayName: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        displayDate: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      })
+    }
+    
+    visits.forEach(visit => {
+      const visitDate = new Date(visit.visit_time)
+      const dateStr = visitDate.toISOString().split('T')[0]
+      
+      if (visitsByDay.has(dateStr)) {
+        visitsByDay.set(dateStr, (visitsByDay.get(dateStr) || 0) + 1)
+      }
+    })
+    
+    dateArray.forEach(item => {
+      item.visits = visitsByDay.get(item.date) || 0
+    })
+    
+    return dateArray
+  }
+  
+  const prepareMonthlyChartData = (visits: {visit_time: string}[] = []) => {
+    if (!visits || visits.length === 0) return []
+    
+    const visitsByMonth = new Map<string, number>()
+    
+    const today = new Date()
+    let monthArray = []
+    
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(today)
+      date.setMonth(date.getMonth() - i)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      visitsByMonth.set(monthKey, 0)
+      monthArray.push({
+        month: monthKey,
+        visits: 0,
+        displayMonth: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+      })
+    }
+    
+    visits.forEach(visit => {
+      const visitDate = new Date(visit.visit_time)
+      const monthKey = `${visitDate.getFullYear()}-${String(visitDate.getMonth() + 1).padStart(2, '0')}`
+      
+      if (visitsByMonth.has(monthKey)) {
+        visitsByMonth.set(monthKey, (visitsByMonth.get(monthKey) || 0) + 1)
+      }
+    })
+    
+    monthArray.forEach(item => {
+      item.visits = visitsByMonth.get(item.month) || 0
+    })
+    
+    return monthArray
   }
 
   return (
@@ -291,6 +441,8 @@ export default function Dashboard() {
                     <tr className="bg-gray-100 dark:bg-gray-700">
                       <th className="px-4 py-2 text-left">Short URL</th>
                       <th className="px-4 py-2 text-left">Original URL</th>
+                      <th className="px-4 py-2 text-center">Clicks</th>
+                      <th className="px-4 py-2 text-center">Last Visit</th>
                       <th className="px-4 py-2 text-center">Actions</th>
                     </tr>
                   </thead>
@@ -304,7 +456,7 @@ export default function Dashboard() {
                             rel="noopener noreferrer"
                             className="text-blue-600 hover:underline break-all"
                           >
-                            {url.shortUrl}
+                            {url.slug}
                           </a>
                         </td>
                         <td className="px-4 py-3">
@@ -322,6 +474,12 @@ export default function Dashboard() {
                               {truncateUrl(url.originalUrl)}
                             </span>
                           )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {url.clicks}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          {url.lastVisit ? formatDateTime(url.lastVisit) : 'No visits yet'}
                         </td>
                         <td className="px-4 py-3 text-center">
                           <div className="flex justify-center space-x-2">
@@ -359,6 +517,13 @@ export default function Dashboard() {
                                   onClick={() => handleStartEdit(url)}
                                 >
                                   Edit
+                                </Button>
+                                <Button 
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => navigate(`/stats/${url.slug}`)}
+                                >
+                                  Stats
                                 </Button>
                                 <AlertDialog>
                                   <AlertDialogTrigger asChild>
@@ -399,6 +564,152 @@ export default function Dashboard() {
             )}
           </CardContent>
         </Card>
+
+        {/* Statistics Modal */}
+        {selectedUrl && (
+          <AlertDialog open={showStats} onOpenChange={setShowStats}>
+            <AlertDialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+              <AlertDialogHeader>
+                <AlertDialogTitle>URL Statistics</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Detailed statistics for: <span className="font-medium">{selectedUrl.shortUrl}</span>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              
+              <div className="py-4 overflow-y-auto flex-grow">
+                {statsLoading ? (
+                  <div className="text-center py-8">Loading statistics...</div>
+                ) : (
+                  <>
+                    {/* Summary Statistics */}
+                    <Card className="mb-6">
+                      <CardHeader>
+                        <h3 className="text-lg font-semibold">Summary</h3>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                          <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                            <div className="text-sm text-gray-500 dark:text-gray-400">Total Clicks</div>
+                            <div className="text-2xl font-bold">{selectedUrl.clicks || 0}</div>
+                          </div>
+                          
+                          {selectedUrl.visits && selectedUrl.visits.length > 0 && getVisitStats(selectedUrl.visits) && (
+                            <>
+                              <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <div className="text-sm text-gray-500 dark:text-gray-400">Today</div>
+                                <div className="text-2xl font-bold">{getVisitStats(selectedUrl.visits)?.today || 0}</div>
+                              </div>
+                              <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <div className="text-sm text-gray-500 dark:text-gray-400">Last 7 Days</div>
+                                <div className="text-2xl font-bold">{getVisitStats(selectedUrl.visits)?.lastWeek || 0}</div>
+                              </div>
+                              <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg">
+                                <div className="text-sm text-gray-500 dark:text-gray-400">Last 30 Days</div>
+                                <div className="text-2xl font-bold">{getVisitStats(selectedUrl.visits)?.lastMonth || 0}</div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        
+                        <div className="mt-4">
+                          <p className="text-sm text-gray-500 dark:text-gray-400">
+                            Original URL: <a href={selectedUrl.originalUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">{selectedUrl.originalUrl}</a>
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    
+                    {/* Visit Charts */}
+                    {selectedUrl.visits && selectedUrl.visits.length > 0 && (
+                      <>
+                        {/* Daily Visits Chart */}
+                        <Card className="mb-6">
+                          <CardHeader>
+                            <h3 className="text-lg font-semibold">Daily Visits (Last 14 Days)</h3>
+                          </CardHeader>
+                          <CardContent>
+                            <Chart 
+                              data={prepareDailyChartData(selectedUrl.visits)}
+                              xAxisDataKey="displayDate"
+                              bars={[
+                                {
+                                  dataKey: "visits",
+                                  name: "Visits",
+                                  color: "#3B82F6"
+                                }
+                              ]}
+                              height={250}
+                            />
+                          </CardContent>
+                        </Card>
+
+                        {/* Monthly Visits Chart */}
+                        <Card className="mb-6">
+                          <CardHeader>
+                            <h3 className="text-lg font-semibold">Monthly Visits (Last 6 Months)</h3>
+                          </CardHeader>
+                          <CardContent>
+                            <Chart 
+                              data={prepareMonthlyChartData(selectedUrl.visits)}
+                              xAxisDataKey="displayMonth"
+                              bars={[
+                                {
+                                  dataKey: "visits",
+                                  name: "Visits",
+                                  color: "#8B5CF6"
+                                }
+                              ]}
+                              height={250}
+                            />
+                          </CardContent>
+                        </Card>
+                      </>
+                    )}
+                    
+                    {/* Visit History */}
+                    {selectedUrl.visits && selectedUrl.visits.length > 0 ? (
+                      <Card>
+                        <CardHeader>
+                          <h3 className="text-lg font-semibold">Visit History</h3>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="overflow-x-auto">
+                            <table className="w-full border-collapse">
+                              <thead>
+                                <tr className="bg-gray-100 dark:bg-gray-700">
+                                  <th className="px-4 py-2 text-left">Visit ID</th>
+                                  <th className="px-4 py-2 text-left">Date & Time</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {[...selectedUrl.visits]
+                                  .sort((a, b) => new Date(b.visit_time).getTime() - new Date(a.visit_time).getTime())
+                                  .map((visit) => (
+                                  <tr key={visit.id} className="border-t border-gray-200 dark:border-gray-700">
+                                    <td className="px-4 py-2 text-sm font-mono">{visit.id.substring(0, 8)}...</td>
+                                    <td className="px-4 py-2">{formatDateTime(visit.visit_time)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ) : (
+                      <div className="text-center py-4 text-gray-500">
+                        No visit data available for this URL yet.
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+              
+              <AlertDialogFooter>
+                <AlertDialogCancel>Close</AlertDialogCancel>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
       </div>
     </div>
   )

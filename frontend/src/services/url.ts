@@ -37,6 +37,16 @@ export interface DeleteUrlRequest {
   slug: string;
 }
 
+export interface VisitData {
+  id: string;
+  shortened_url_id: string;
+  visit_time: string;
+}
+
+export interface GetVisitsResponse {
+  visits: VisitData[];
+}
+
 export const urlService = {
   async shortenUrl(request: ShortenUrlRequest): Promise<ShortenUrlResponse> {
     // Use direct axios without withCredentials for the API Gateway endpoint
@@ -91,9 +101,32 @@ export const urlService = {
     return response.data;
   },
   
-  // Helper method to format URL display
+  async getAllVisits(): Promise<GetVisitsResponse> {
+    const token = localStorage.getItem('access_token');
+    const response = await axios.get<GetVisitsResponse>(`${API_BASE_URL}/shorten/visits/`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      withCredentials: false
+    });
+    return response.data;
+  },
+  
+  async getUrlVisits(slug: string): Promise<GetVisitsResponse> {
+    const token = localStorage.getItem('access_token');
+    const response = await axios.get<GetVisitsResponse>(`${API_BASE_URL}/shorten/visits/${slug}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      withCredentials: false
+    });
+    return response.data;
+  },
+  
   formatShortUrl(slug: string): string {
-    const baseUrl = window.location.origin;
+    const baseUrl = API_BASE_URL.replace(/\/$/, '');
     return `${baseUrl}/${slug}`;
   }
 };
