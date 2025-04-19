@@ -68,7 +68,19 @@ async def update_long_url(slug, new_url, new_slug=None):
         )
 
 async def delete_short_url(slug):
-    return await run_query_fetchrow(
+    short_url = await get_short_url_record(slug=slug)
+    if not short_url:
+        return None
+    
+    await run_query_execute(
+        """
+        DELETE FROM url_visits
+        WHERE shortened_url_id = $1
+        """,
+        short_url["id"]
+    )
+    
+    deleted_url = await run_query_fetchrow(
         """
         DELETE FROM shortened_urls
         WHERE slug = $1
@@ -76,6 +88,7 @@ async def delete_short_url(slug):
         """,
         slug
     )
+    return deleted_url
 
 async def create_url_visit(slug):
     shortened_url = await get_short_url_record(slug=slug)

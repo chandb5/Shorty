@@ -67,18 +67,11 @@ async def async_handler(event, context):
     AWS Lambda function to handle public events.
     """
     print(f"Received event: {event}")
-    print("Hello from public!")
 
-    # Extract the slug from the event
     method = event.get("requestContext", {}).get("http", {}).get("method")
     path = event.get("requestContext", {}).get("http", {}).get("path")
     path = path[:-1] if path.endswith("/") else path
     slug = path.split("/")[-1]
-    print(f"method: {method}")
-    print(f"path: {path}")
-    print(f"slug: {slug}")
-    print(f"event: {event}")
-
 
     if not (method == "GET" and path == f"/{slug}") or not slug:
         return {

@@ -56,7 +56,6 @@ async def async_handler(event, context):
         "user_agent": user_agent,
         "timestamp": timestamp
     })
-    print(f"S3 response: {response}")
     return {
         "statusCode": 200,
         "body": json.dumps({"message": "Click event processed successfully"})

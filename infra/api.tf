@@ -1,6 +1,15 @@
 resource "aws_apigatewayv2_api" "shortener_api" {
   name          = "ShortenerAPI"
   protocol_type = "HTTP"
+  
+  cors_configuration {
+    allow_origins     = ["http://localhost:3000", "http://3.91.170.131"]
+    allow_methods     = ["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"]
+    allow_headers     = ["Content-Type", "Authorization", "X-Amz-Date", "X-Api-Key", "X-Amz-Security-Token", "Access-Control-Allow-Origin", "Access-Control-Allow-Headers", "Access-Control-Allow-Methods"]
+    expose_headers    = ["Content-Length", "X-Amz-Date", "X-Api-Key", "Access-Control-Allow-Origin", "Access-Control-Allow-Headers"]
+    allow_credentials = true
+    max_age           = 300
+  }
 }
 
 resource "aws_apigatewayv2_stage" "default" {

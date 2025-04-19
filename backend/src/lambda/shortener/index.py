@@ -83,33 +83,36 @@ def middleware(event, context):
 async def async_handler(event, context):
     method = event.get("requestContext", {}).get("http", {}).get("method")
     raw_path = event.get("requestContext", {}).get("http", {}).get("path", "")
-    path = raw_path.replace("/shorten", "").rstrip("/")
+
+    clean_path = raw_path.rstrip("/")
 
     user_id = event.get("token_payload", {}).get("sub")
     if not user_id:
         return create_response(401, {"message": "Missing user ID in token payload"})
 
-    if method == "GET" and path == "":
-        urls = await list_short_urls(user_id)
-        return create_response(200, {"short_urls": urls})
+    if method == "GET":
+        if clean_path == "/shorten":
+            urls = await list_short_urls(user_id)
+            return create_response(200, {"short_urls": urls})
 
-    if method == "GET" and path.startswith("/visits"):
-        slug_part = path[len("/visits"):].strip("/")
+        if clean_path.startswith("/shorten/visits"):
+            slug_part = clean_path[len("/shorten/visits"):].strip("/")
 
-        if not slug_part:
-            all_visits = await get_url_visits_by_user(user_id)
-            return create_response(200, {"visits": all_visits})
-        else:
-            slug = slug_part
-            try:
-                slug_visits = await get_url_visits(slug=slug)
-            except ValueError as e:
-                if str(e) == "Shortened URL not found":
-                    return create_response(404, {"error": "Shortened URL not found"})
+            if not slug_part:
+                all_visits = await get_url_visits_by_user(user_id)
+                return create_response(200, {"visits": all_visits})
+            else:
+                slug = slug_part
+                try:
+                    slug_visits = await get_url_visits(slug=slug)
+                except ValueError as e:
+                    print(e)
+                    if str(e) == "Shortened URL not found":
+                        return create_response(404, {"error": "Shortened URL not found"})
 
-            return create_response(200, {"visits": slug_visits})
-    
-    if method == "PUT" and path == "/":
+                return create_response(200, {"visits": slug_visits})
+
+    if method == "PUT" and clean_path == "/shorten":
         body = parse_body(event)
 
         existing_record = await get_short_url_record(slug=body.get("slug"))
@@ -132,18 +135,27 @@ async def async_handler(event, context):
             new_url=new_url,
             new_slug=new_slug
         )
-        
+
         return create_response(200, {"message": "Short URL updated successfully!", "data": updated_record})
 
-    if method == "DELETE" and path == "/":
+    if method == "DELETE" and clean_path == "/shorten":
         body = parse_body(event)
         await delete_short_url(body.get("slug"))
         return create_response(200, {"message": "Short URL deleted successfully!"})
+
+    if method == "POST" and clean_path == "/shorten":
+        body = parse_body(event)
+        result = await handle_create_short_url(body, user_id)
+        return create_response(201, {"message": "Short URL created successfully!", "data": result})
 
     return create_response(404, {"error": "Page Not found"})
 
 
 def handler(event, context):
+    method = event.get("requestContext", {}).get("http", {}).get("method")
+    if method == "OPTIONS":
+        return create_response(200, {})
+
     event = middleware(event, context)
     if isinstance(event, dict) and "statusCode" in event:
         return event

@@ -158,13 +158,11 @@ async def async_handler(event, context):
     path = path.replace("/auth", "")
     path = path[:-1] if path.endswith("/") else path
 
-    print(f"Received event: {event}")
-    print(f"method: {method}")
-    print(f"path: {path}")
-
     body = parse_body(event)
-    print(f"body: {body}")
 
+    if method == "OPTIONS":
+        return create_response(200, {})
+        
     if method == "POST":
         if path == "/register":
             return await handle_register(body)

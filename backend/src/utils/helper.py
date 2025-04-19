@@ -8,7 +8,13 @@ def create_response(status_code, body):
     return {
         "statusCode": status_code,
         "body": json.dumps(body, indent=4, sort_keys=True, default=str),
-        "Content-Type": "application/json"
+        "headers": {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "http://localhost:3000",
+            "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
+            "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+            "Access-Control-Allow-Credentials": "true"
+        }
     }
 
 def parse_body(event):
