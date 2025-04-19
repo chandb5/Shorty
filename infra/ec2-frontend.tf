@@ -2,7 +2,6 @@ resource "aws_instance" "web-server-frontend" {
   ami             = "ami-0655cec52acf2717b" # Ubuntu 22.04 LTS
   instance_type   = "t3.micro"
   key_name        = aws_key_pair.frontend-ec2-key.key_name
-  security_groups = [aws_security_group.frontend-ec2-sg.name]
 
   user_data = <<-EOF
                 #!/bin/bash
@@ -23,6 +22,8 @@ resource "aws_instance" "web-server-frontend" {
   tags = {
     Name = "web-server-frontend"
   }
+  subnet_id = aws_subnet.public.id
+  vpc_security_group_ids = [aws_security_group.frontend-ec2-sg.id]
 }
 
 resource "aws_key_pair" "frontend-ec2-key" {
@@ -33,6 +34,7 @@ resource "aws_key_pair" "frontend-ec2-key" {
 resource "aws_security_group" "frontend-ec2-sg" {
   name        = "frontend-ec2-sg"
   description = "Allow SSH and HTTP traffic"
+  vpc_id = aws_vpc.main.id
   ingress {
     from_port   = 80
     to_port     = 80
